@@ -20,49 +20,56 @@ yellow() {
 if [ -f /etc/redhat-release ]; then
   release='centos'
   syspkg='yum'
-  syspwd='/usr/lib/systemd/system/'
+  syspwd='/usr/lib/systemd/system'
 elif cat /etc/issue | grep -Eqi 'debian'; then
   release='debian'
   syspkg='apt-get'
-  syspwd='/lib/systemd/system/'
+  syspwd='/lib/systemd/system'
 elif cat /etc/issue | grep -Eqi 'ubuntu'; then
   release='ubuntu'
   syspkg='apt-get'
-  syspwd='/lib/systemd/system/'
+  syspwd='/lib/systemd/system'
 elif cat /etc/issue | grep -Eqi 'centos|red hat|redhat'; then
   release='centos'
   syspkg='yum'
-  syspwd='/usr/lib/systemd/system/'
+  syspwd='/usr/lib/systemd/system'
 elif cat /proc/version | grep -Eqi 'debian'; then
   release='debian'
   syspkg='apt-get'
-  syspwd='/lib/systemd/system/'
+  syspwd='/lib/systemd/system'
 elif cat /proc/version | grep -Eqi 'ubuntu'; then
   release='ubuntu'
   syspkg='apt-get'
-  syspwd='/lib/systemd/system/'
+  syspwd='/lib/systemd/system'
 elif cat /proc/version | grep -Eqi 'centos|red hat|redhat'; then
   release='centos'
   syspkg='yum'
-  syspwd='/usr/lib/systemd/system/'
+  syspwd='/usr/lib/systemd/system'
 fi
-
-if [ ! -e '/etc/redhat-release' ]; then
-  red "==============="
-  red " 仅支持CentOS7"
-  red "==============="
-  exit
-fi
-
-if [ -n "$(grep ' 6\.' /etc/redhat-release)" ]; then
-  red "==============="
-  red " 仅支持CentOS7"
-  red "==============="
-  exit
-fi
-
 
 install_trojan() {
+  systemctl stop nginx
+  $syspkg -y install net-tools socat
+  Port80=`netstat -tlpn | awk -F '[: ]+' '$1=="tcp"{print $5}' | grep -w 80`
+  Port443=`netstat -tlpn | awk -F '[: ]+' '$1=="tcp"{print $5}' | grep -w 443`
+
+  # check if port 80 and 443 are being used
+  if [ -n "$Port80" ]; then
+      process80=`netstat -tlpn | awk -F '[: ]+' '$5=="80"{print $9}'`
+      red "==========================================================="
+      red "检测到80端口被占用，占用进程为：${process80}，本次安装结束"
+      red "==========================================================="
+      exit 1
+  fi
+
+  if [ -n "$Port443" ]; then
+      process443=`netstat -tlpn | awk -F '[: ]+' '$5=="443"{print $9}'`
+      red "============================================================="
+      red "检测到443端口被占用，占用进程为：${process443}，本次安装结束"
+      red "============================================================="
+      exit 1
+  fi
+
   if [ "$release" == "centos" ]; then
     if  [ -n "$(grep ' 6\.' /etc/redhat-release)" ] ;then
       red "================"
@@ -98,6 +105,8 @@ install_trojan() {
 
     systemctl stop ufw
     systemctl disable ufw
+    apt-get update
+  elif [ "$release" == "debian" ]; then
     apt-get update
   fi
 
@@ -152,7 +161,7 @@ install_trojan() {
     green "=========================================="
     sleep 1s
     
-    systemctl enable nginx.service
+    systemctl enable nginx
 
     # config nginx
     cat <<EOF >/etc/nginx/nginx.conf 
@@ -187,9 +196,10 @@ EOF
     # mock website
     rm -rf /usr/share/nginx/html/*
     cd /usr/share/nginx/html/
-    wget https://github.com/atrandys/v2ray-ws-tls/raw/master/web.zip
+    wget https://github.com/kashinYing/trojan/raw/master/web.zip
     unzip web.zip
-    systemctl restart nginx.service
+    systemctl restart nginx
+    sleep 5
 
     # generate certificate for https
     mkdir /usr/src/trojan-cert
@@ -198,20 +208,26 @@ EOF
     ~/.acme.sh/acme.sh --installcert -d  $your_domain \
       --key-file   /usr/src/trojan-cert/private.key \
       --fullchain-file /usr/src/trojan-cert/fullchain.cer \
-      --reloadcmd  "systemctl force-reload  nginx.service"
+      --reloadcmd  "systemctl force-reload nginx"
 
     if [ test -s /usr/src/trojan-cert/fullchain.cer ]; then
       cd /usr/src
-      #wget https://github.com/trojan-gfw/trojan/releases/download/v1.13.0/trojan-1.13.0-linux-amd64.tar.xz
-      wget https://github.com/trojan-gfw/trojan/releases/download/v1.14.0/trojan-1.14.0-linux-amd64.tar.xz
-      tar xf trojan-1.*
-      #下载trojan客户端
-      wget https://github.com/atrandys/trojan/raw/master/trojan-cli.zip
-      unzip trojan-cli.zip
-      cp /usr/src/trojan-cert/fullchain.cer /usr/src/trojan-cli/fullchain.cer
+      wget https://api.github.com/repos/trojan-gfw/trojan/releases/latest
+      latest_version=`grep tag_name latest| awk -F '[:,"v]' '{print $6}'`
+
+      # download trojan server
+      wget https://github.com/trojan-gfw/trojan/releases/download/v${latest_version}/trojan-${latest_version}-linux-amd64.tar.xz
+      tar xf trojan-${latest_version}-linux-amd64.tar.xz
+
+      # download trojan client for mac
+      wget -P /usr/src/trojan-macos https://github.com/trojan-gfw/trojan/releases/download/v${latest_version}/trojan-${latest_version}-macos.zip
+      unzip /usr/src/trojan-macos/trojan-${latest_version}-macos.zip -d /usr/src/trojan-macos/
+
+      # generate random password
       trojan_passwd=$(cat /dev/urandom | head -1 | md5sum | head -c 8)
 
-      cat > /usr/src/trojan-cli/config.json <<-EOF
+      # configuration for trojan mac client
+      cat <<EOF >usr/src/trojan-macos/trojan/config.json
 {
   "run_type": "client",
   "local_addr": "127.0.0.1",
@@ -225,8 +241,9 @@ EOF
   "ssl": {
     "verify": true,
     "verify_hostname": true,
-    "cert": "fullchain.cer",
-    "cipher_tls13":"TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_256_GCM_SHA384",
+    "cert": "",
+    "cipher": "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES128-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA:AES128-SHA:AES256-SHA:DES-CBC3-SHA",
+    "cipher_tls13": "TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_256_GCM_SHA384",
     "sni": "",
     "alpn": [
       "h2",
@@ -239,14 +256,15 @@ EOF
   "tcp": {
     "no_delay": true,
     "keep_alive": true,
+    "reuse_port": false,
     "fast_open": false,
     "fast_open_qlen": 20
   }
 }
 EOF
-      rm -rf /usr/src/trojan/server.conf
 
-      cat > /usr/src/trojan/server.conf <<-EOF
+      rm -rf /usr/src/trojan/server.conf
+      cat <<EOF >/usr/src/trojan/server.conf
 {
   "run_type": "server",
   "local_addr": "0.0.0.0",
@@ -289,14 +307,16 @@ EOF
   }
 }
 EOF
-      cd /usr/src/trojan-cli/
-      zip -q -r trojan-cli.zip /usr/src/trojan-cli/
+      
+      # package client trojan
+      cd /usr/src/trojan-macos/
+      zip -q -r trojan-mac.zip /usr/src/trojan-macos/
       trojan_path=$(cat /dev/urandom | head -1 | md5sum | head -c 16)
       mkdir /usr/share/nginx/html/${trojan_path}
-      mv /usr/src/trojan-cli/trojan-cli.zip /usr/share/nginx/html/${trojan_path}/
-      #增加启动脚本
-  
-      cat > /usr/lib/systemd/system/trojan.service <<-EOF
+      mv /usr/src/trojan-macos/trojan-mac.zip /usr/share/nginx/html/${trojan_path}/
+      
+      # add autostart script
+      cat <<EOF >{syspwd}/trojan.service
 [Unit]  
 Description=trojan  
 After=network.target  
@@ -313,17 +333,17 @@ PrivateTmp=true
 WantedBy=multi-user.target
 EOF
 
-      chmod +x /usr/lib/systemd/system/trojan.service
+      chmod +x {syspwd}/trojan.service
       systemctl start trojan.service
       systemctl enable trojan.service
-      green "======================================================================"
+      green "============================================================================="
       green "Trojan已安装完成，请使用以下链接下载trojan客户端，此客户端已配置好所有参数"
       green "1、复制下面的链接，在浏览器打开，下载客户端"
-      blue "http://${your_domain}/$trojan_path/trojan-cli.zip"
-      green "2、将下载的压缩包解压，打开文件夹，打开start.bat即打开并运行Trojan客户端"
-      green "3、打开stop.bat即关闭Trojan客户端"
-      green "4、Trojan客户端需要搭配浏览器插件使用，例如switchyomega等"
-      green "======================================================================"
+      blue "MacOS客户端下载：http://${your_domain}/$trojan_path/trojan-mac.zip"
+      green "3、MacOS将下载的客户端解压，打开文件夹，打开start.command即打开并运行Trojan客户端"
+      green "Trojan推荐使用 Mellow 工具代理（WIN/MAC通用）下载地址如下："
+      green "https://github.com/mellow-io/mellow/releases  (exe为Win客户端,dmg为Mac客户端)"
+      green "============================================================================="
     else
       red "==================================="
       red "https证书没有申请成果，本次安装失败"
@@ -345,13 +365,21 @@ remove_trojan() {
   red "================================"
   systemctl stop trojan
   systemctl disable trojan
-  rm -f /usr/lib/systemd/system/trojan.service
-  yum remove -y nginx
+  rm -f ${syspwd}/trojan.service
+  if [ "$release" == "centos" ]; then
+    yum remove -y nginx
+  else
+    apt autoremove -y nginx
+  fi
   rm -rf /usr/src/trojan*
   rm -rf /usr/share/nginx/html/*
   green "=============="
   green "trojan删除完毕"
   green "=============="
+}
+
+bbr_boost_sh(){
+  wget -N --no-check-certificate "https://raw.githubusercontent.com/chiakge/Linux-NetSpeed/master/tcp.sh" && chmod +x tcp.sh && ./tcp.sh
 }
 
 start_menu() {
@@ -364,6 +392,7 @@ start_menu() {
   echo
   green " 1. 安装trojan"
   red " 2. 卸载trojan"
+  green "3. 安装bbr-plus"
   yellow " 0. 退出脚本"
   echo
   read -p "请输入数字:" num
@@ -373,7 +402,11 @@ start_menu() {
       ;;
 
     2)
-      remove_trojan 
+      remove_trojan
+      ;;
+
+    3)
+      bbr_boost_sh
       ;;
 
     0)
