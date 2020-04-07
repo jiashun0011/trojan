@@ -210,7 +210,7 @@ EOF
       --fullchain-file /usr/src/trojan-cert/fullchain.cer \
       --reloadcmd  "systemctl force-reload nginx"
 
-    if [ test -s /usr/src/trojan-cert/fullchain.cer ]; then
+    if test -s /usr/src/trojan-cert/fullchain.cer; then
       cd /usr/src
       wget https://api.github.com/repos/trojan-gfw/trojan/releases/latest
       latest_version=`grep tag_name latest| awk -F '[:,"v]' '{print $6}'`
@@ -386,13 +386,12 @@ start_menu() {
   clear
   green " ===================================="
   green " 介绍：一键安装trojan                "
-  green " 系统：>=centos7                     "
   green " 作者：kashin                        "
   green " ===================================="
   echo
   green " 1. 安装trojan"
   red " 2. 卸载trojan"
-  green "3. 安装bbr-plus"
+  green " 3. 安装bbr-plus"
   yellow " 0. 退出脚本"
   echo
   read -p "请输入数字:" num
