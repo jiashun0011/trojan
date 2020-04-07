@@ -227,7 +227,7 @@ EOF
       trojan_passwd=$(cat /dev/urandom | head -1 | md5sum | head -c 8)
 
       # configuration for trojan mac client
-      cat <<EOF >usr/src/trojan-macos/trojan/config.json
+      cat <<EOF >/usr/src/trojan-macos/trojan/config.json
 {
   "run_type": "client",
   "local_addr": "127.0.0.1",
@@ -316,7 +316,7 @@ EOF
       mv /usr/src/trojan-macos/trojan-mac.zip /usr/share/nginx/html/${trojan_path}/
       
       # add autostart script
-      cat <<EOF >{syspwd}/trojan.service
+      cat <<EOF >${syspwd}/trojan.service
 [Unit]  
 Description=trojan  
 After=network.target  
@@ -333,14 +333,14 @@ PrivateTmp=true
 WantedBy=multi-user.target
 EOF
 
-      chmod +x {syspwd}/trojan.service
+      chmod +x ${syspwd}/trojan.service
       systemctl start trojan.service
       systemctl enable trojan.service
       green "============================================================================="
       green "Trojan已安装完成，请使用以下链接下载trojan客户端，此客户端已配置好所有参数"
-      green "1、复制下面的链接，在浏览器打开，下载客户端"
-      blue "MacOS客户端下载：http://${your_domain}/$trojan_path/trojan-mac.zip"
-      green "3、MacOS将下载的客户端解压，打开文件夹，打开start.command即打开并运行Trojan客户端"
+      green "1. 复制下面的链接，在浏览器打开，下载客户端"
+      blue "2. MacOS客户端下载：http://${your_domain}/$trojan_path/trojan-mac.zip"
+      green "3. MacOS将下载的客户端解压，打开文件夹，打开start.command即打开并运行Trojan客户端"
       green "Trojan推荐使用 Mellow 工具代理（WIN/MAC通用）下载地址如下："
       green "https://github.com/mellow-io/mellow/releases  (exe为Win客户端,dmg为Mac客户端)"
       green "============================================================================="
