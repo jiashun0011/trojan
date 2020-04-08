@@ -310,7 +310,7 @@ EOF
       
       # package client trojan
       cd /usr/src/trojan-macos/
-      zip -q -r trojan-mac.zip /usr/src/trojan-macos/trojan
+      zip -q -r -j trojan-mac.zip /usr/src/trojan-macos/trojan
       trojan_path=$(cat /dev/urandom | head -1 | md5sum | head -c 16)
       mkdir /usr/share/nginx/html/${trojan_path}
       mv /usr/src/trojan-macos/trojan-mac.zip /usr/share/nginx/html/${trojan_path}/
@@ -388,8 +388,9 @@ loglevel = warning
 EOF
 
       chmod +x ${syspwd}/trojan.service
-      systemctl start trojan.service
       systemctl enable trojan.service
+      systemctl start trojan.service
+
       green "================================================================================="
       green "Trojan已安装完成，请使用以下链接下载trojan客户端，此客户端已配置好所有参数"
       green "1. 复制下面的链接，在浏览器打开，下载客户端"
