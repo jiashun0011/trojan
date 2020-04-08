@@ -428,6 +428,7 @@ remove_trojan() {
   fi
   rm -rf /usr/src/trojan*
   rm -rf /usr/share/nginx/html/*
+  rm -rf /usr/src/latest*
   green "=============="
   green "trojan删除完毕"
   green "=============="
