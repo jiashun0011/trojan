@@ -310,7 +310,7 @@ EOF
       
       # package client trojan
       cd /usr/src/trojan-macos/
-      zip -q -r trojan-mac.zip /usr/src/trojan-macos/
+      zip -q -r trojan-mac.zip /usr/src/trojan-macos/trojan
       trojan_path=$(cat /dev/urandom | head -1 | md5sum | head -c 16)
       mkdir /usr/share/nginx/html/${trojan_path}
       mv /usr/src/trojan-macos/trojan-mac.zip /usr/share/nginx/html/${trojan_path}/
@@ -333,17 +333,72 @@ PrivateTmp=true
 WantedBy=multi-user.target
 EOF
 
+      mkdir /usr/share/nginx/html/mellow
+      # create mellow.conf
+      cat <<EOF >/usr/share/nginx/html/mellow/mellow.conf
+[Endpoint]
+; tag, parser, parser-specific params...
+Direct, builtin, freedom, domainStrategy=UseIP
+Reject, builtin, blackhole
+Dns-Out, builtin, dns
+Trojan-out, builtin, socks, address=127.0.0.1, port=1080
+
+[EndpointGroup]
+Group-1, Trojan-out, latency, interval=300, timeout=6
+
+[RoutingRule]
+DOMAIN-KEYWORD, geosite:category-ads-all, Reject
+IP-CIDR, 223.5.5.5/32, Direct
+IP-CIDR, 8.8.8.8/32, Group-1
+IP-CIDR, 8.8.4.4/32, Group-1
+PROCESS-NAME, trojan, Direct
+PROCESS-NAME, ssh, Direct
+GEOIP, cn, Direct
+GEOIP, private, Direct
+DOMAIN-KEYWORD, geosite:cn, Direct
+; DOMAIN, www.google.com, Group-1
+; DOMAIN-FULL, www.google.com, Group-1
+; DOMAIN-SUFFIX, google.com, Group-1
+FINAL, Group-1
+
+[Dns]
+; hijack = dns endpoint tag
+hijack = Dns-Out
+; cliengIp = ip
+clientIp = 114.114.114.114
+
+[DnsServer]
+; address, port, tag
+localhost
+223.5.5.5
+8.8.8.8, 53, Remote
+8.8.4.4
+
+[DnsRule]
+; type, filter, dns server tag
+DOMAIN-KEYWORD, geosite:geolocation-!cn, Remote
+DOMAIN-SUFFIX, google.com, Remote
+
+[DnsHost]
+; domain = ip
+doubleclick.net = 127.0.0.1
+
+[Log]
+loglevel = warning
+EOF
+
       chmod +x ${syspwd}/trojan.service
       systemctl start trojan.service
       systemctl enable trojan.service
-      green "============================================================================="
+      green "================================================================================="
       green "Trojan已安装完成，请使用以下链接下载trojan客户端，此客户端已配置好所有参数"
       green "1. 复制下面的链接，在浏览器打开，下载客户端"
-      blue "2. MacOS客户端下载：http://${your_domain}/$trojan_path/trojan-mac.zip"
+      blue "2. MacOS客户端下载：http://$your_domain/$trojan_path/trojan-mac.zip"
       green "3. MacOS将下载的客户端解压，打开文件夹，打开start.command即打开并运行Trojan客户端"
-      green "Trojan推荐使用 Mellow 工具代理（WIN/MAC通用）下载地址如下："
-      green "https://github.com/mellow-io/mellow/releases  (exe为Win客户端,dmg为Mac客户端)"
-      green "============================================================================="
+      green "4. Trojan推荐使用 Mellow 工具代理（WIN/MAC通用）下载地址如下："
+      green "   https://github.com/mellow-io/mellow/releases  (exe为Win客户端,dmg为Mac客户端)"
+      green "   配置文件参考：http://$your_domain/mellow/mellow.conf"
+      green "================================================================================="
     else
       red "==================================="
       red "https证书没有申请成果，本次安装失败"
