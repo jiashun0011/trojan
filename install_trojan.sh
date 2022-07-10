@@ -48,12 +48,13 @@ elif cat /proc/version | grep -Eqi 'centos|red hat|redhat'; then
 fi
 
 install_trojan() {
+  myport=$1
   systemctl stop nginx
   $syspkg -y install net-tools socat
   Port80=`netstat -tlpn | awk -F '[: ]+' '$1=="tcp"{print $5}' | grep -w 80`
-  Port443=`netstat -tlpn | awk -F '[: ]+' '$1=="tcp"{print $5}' | grep -w 443`
+  PortMyport=`netstat -tlpn | awk -F '[: ]+' '$1=="tcp"{print $5}' | grep -w $myport`
 
-  # check if port 80 and 443 are being used
+  # check if port 80 and myport are being used
   if [ -n "$Port80" ]; then
       process80=`netstat -tlpn | awk -F '[: ]+' '$5=="80"{print $9}'`
       red "==========================================================="
@@ -62,10 +63,10 @@ install_trojan() {
       exit 1
   fi
 
-  if [ -n "$Port443" ]; then
-      process443=`netstat -tlpn | awk -F '[: ]+' '$5=="443"{print $9}'`
+  if [ -n "$PortMyport" ]; then
+      processMyport=`netstat -tlpn | awk -F '[: ]+' '$5=="$myport"{print $9}'`
       red "============================================================="
-      red "检测到443端口被占用，占用进程为：${process443}，本次安装结束"
+      red "检测到$myport端口被占用，占用进程为：${processMyport}，本次安装结束"
       red "============================================================="
       exit 1
   fi
@@ -233,7 +234,7 @@ EOF
   "local_addr": "127.0.0.1",
   "local_port": 1080,
   "remote_addr": "$your_domain",
-  "remote_port": 443,
+  "remote_port": $myport,
   "password": [
     "$trojan_passwd"
   ],
@@ -268,7 +269,7 @@ EOF
 {
   "run_type": "server",
   "local_addr": "0.0.0.0",
-  "local_port": 443,
+  "local_port": $myport,
   "remote_addr": "127.0.0.1",
   "remote_port": 80,
   "password": [
@@ -454,7 +455,8 @@ start_menu() {
   read -p "请输入数字:" num
   case "$num" in
     1)
-      install_trojan
+      read -p "请输入端口号:" myport
+      install_trojan $myport
       ;;
 
     2)

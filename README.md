@@ -1,4 +1,16 @@
-# how to use
+# prerequisites
+- VM
+  - [Azure](https://azure.microsoft.com/)
+  - [HOSTKVM](https://hostkvm.com/)
+- Domain
+  - [GoDaddy](https://www.godaddy.com/)
+
+# install 
+```bash
+$ ./install_trojan.sh
 ```
-curl -O https://raw.githubusercontent.com/kashinYing/trojan/master/install_trojan.sh && chmod +x install_trojan.sh && ./install_trojan.sh
+
+# debug
+```bash
+$ journalctl -u trojan
 ```
