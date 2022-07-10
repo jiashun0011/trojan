@@ -397,9 +397,8 @@ EOF
       green "1. 复制下面的链接，在浏览器打开，下载客户端"
       blue "2. MacOS客户端下载：http://$your_domain/$trojan_path/trojan-mac.zip"
       green "3. MacOS将下载的客户端解压，打开文件夹，打开start.command即打开并运行Trojan客户端"
-      green "4. Trojan推荐使用 Mellow 工具代理（WIN/MAC通用）下载地址如下："
-      green "   https://github.com/mellow-io/mellow/releases  (exe为Win客户端,dmg为Mac客户端)"
-      green "   配置文件参考：http://$your_domain/mellow/mellow.conf"
+      green "4. Trojan推荐使用 Maple 工具代理, 下载地址如下："
+      green "   https://github.com/YtFlow/Maple"
       green "================================================================================="
     else
       red "==================================="
