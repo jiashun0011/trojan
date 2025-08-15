@@ -356,6 +356,29 @@ bbr_boost_sh(){
   wget -q -N --no-check-certificate "https://raw.githubusercontent.com/chiakge/Linux-NetSpeed/master/tcp.sh" && chmod +x tcp.sh && bash ./tcp.sh
 }
 
+LOG_FILE=""; DEBUG_TRACE=0; DISABLE_COLOR=0
+
+disable_color_if_needed() {
+  if [[ $DISABLE_COLOR -eq 1 || ! -t 1 ]]; then
+    blue()   { echo "$*"; }
+    green()  { echo "$*"; }
+    red()    { echo "$*"; }
+    yellow() { echo "$*"; }
+  fi
+}
+
+step() { green "[STEP] $*"; }
+
+setup_install_logging() {
+  [[ -n $LOG_FILE ]] || LOG_FILE="/var/log/trojan-install-$(date +%Y%m%d-%H%M%S).log"
+  mkdir -p "$(dirname "$LOG_FILE")"
+  touch "$LOG_FILE" || { red "无法写入日志文件 $LOG_FILE"; exit 1; }
+  green "安装日志: $LOG_FILE"
+  # Redirect all subsequent stdout/stderr
+  exec > >(tee -a "$LOG_FILE") 2>&1
+  [[ $DEBUG_TRACE -eq 1 ]] && set -x
+}
+
 usage() {
   cat <<EOF
 用法: $0 [命令] [选项]
@@ -371,6 +394,9 @@ usage() {
   -d, --domain <域名>
   -p, --port   <端口>
   -y, --yes           非交互确认 (卸载)
+  --log-file <路径>   指定安装日志文件 (默认 /var/log/trojan-install-时间戳.log)
+  --debug              开启 bash 跟踪 (set -x)
+  --no-color           关闭彩色输出
 示例:
   $0 --install -d example.com -p 443
   $0 --remove -y
@@ -391,6 +417,9 @@ parse_args() {
       -d|--domain) DOMAIN=${2:-}; shift 2 ;;
       -p|--port)   PORT=${2:-}; shift 2 ;;
       -y|--yes)    ASSUME_YES=1; shift ;;
+      --log-file) LOG_FILE=${2:-}; shift 2 ;;
+      --debug) DEBUG_TRACE=1; shift ;;
+      --no-color) DISABLE_COLOR=1; shift ;;
       -h|--help)   usage; exit 0 ;;
       *) red "未知参数: $1"; usage; exit 1 ;;
     esac
@@ -414,7 +443,7 @@ start_menu() {
     1)
       read -rp "请输入域名: " DOMAIN
       read -rp "请输入端口号: " PORT
-      install_flow "$DOMAIN" "$PORT" ;;
+  install_flow "$DOMAIN" "$PORT" ;;
     2)
       read -rp "确认卸载? (y/N): " ans; [[ ${ans,,} == y ]] && remove_trojan || green "已取消" ;;
     3)
@@ -430,13 +459,18 @@ main() {
   require_root
   detect_os
   parse_args "$@"
+  disable_color_if_needed
   if [[ $INTERACTIVE_MENU -eq 1 ]]; then
     start_menu; exit 0
   fi
   case $ACTION in
     install)
       [[ -z ${DOMAIN} || -z ${PORT} ]] && { red "安装需要 --domain 与 --port"; exit 1; }
-      install_flow "$DOMAIN" "$PORT" ;;
+      setup_install_logging
+      step "开始安装: 域名=$DOMAIN 端口=$PORT"
+      install_flow "$DOMAIN" "$PORT"
+      step "安装完成"
+  ;;
     remove)
       if [[ $ASSUME_YES -ne 1 ]]; then
         read -rp "确认卸载 trojan? (y/N): " ok; [[ ${ok,,} == y ]] || { green "已取消"; exit 0; }

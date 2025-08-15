@@ -18,6 +18,9 @@
 # install trojan
 ./install_trojan.sh --install -d your.domain.com -p 443
 
+# specify custom install log file & enable debug trace
+./install_trojan.sh --install -d your.domain.com -p 443 --log-file /tmp/trojan-install.log --debug
+
 # uninstall trojan
 ./install_trojan.sh --remove -y
 
