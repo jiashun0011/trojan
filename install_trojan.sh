@@ -383,7 +383,7 @@ bbr_boost_sh(){
   wget -q -N --no-check-certificate "https://raw.githubusercontent.com/chiakge/Linux-NetSpeed/master/tcp.sh" && chmod +x tcp.sh && bash ./tcp.sh
 }
 
-LOG_FILE=""; DEBUG_TRACE=0; DISABLE_COLOR=0
+LOG_FILE=""; DISABLE_COLOR=0
 
 disable_color_if_needed() {
   if [[ $DISABLE_COLOR -eq 1 || ! -t 1 ]]; then
@@ -403,7 +403,6 @@ setup_install_logging() {
   green "安装日志: $LOG_FILE"
   # Redirect all subsequent stdout/stderr
   exec > >(tee -a "$LOG_FILE") 2>&1
-  [[ $DEBUG_TRACE -eq 1 ]] && set -x
 }
 
 usage() {
@@ -422,7 +421,6 @@ usage() {
   -p, --port   <端口>
   -y, --yes           非交互确认 (卸载)
   --log-file <路径>   指定安装日志文件 (默认 /var/log/trojan-install-时间戳.log)
-  --debug              开启 bash 跟踪 (set -x)
   --no-color           关闭彩色输出
 示例:
   $0 --install -d example.com -p 443
@@ -445,7 +443,6 @@ parse_args() {
       -p|--port)   PORT=${2:-}; shift 2 ;;
       -y|--yes)    ASSUME_YES=1; shift ;;
       --log-file) LOG_FILE=${2:-}; shift 2 ;;
-      --debug) DEBUG_TRACE=1; shift ;;
       --no-color) DISABLE_COLOR=1; shift ;;
       -h|--help)   usage; exit 0 ;;
       *) red "未知参数: $1"; usage; exit 1 ;;
