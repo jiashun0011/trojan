@@ -62,10 +62,13 @@ detect_os() {
 ensure_packages() {
   if [[ $PKG_MGR == apt-get ]]; then
     apt-get update -y >/dev/null 2>&1 || true
-    DEBIAN_FRONTEND=noninteractive apt-get install -y nginx wget unzip zip curl tar socat jq xz-utils >/dev/null 2>&1
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+      nginx wget unzip zip curl tar socat jq xz-utils dnsutils ca-certificates >/dev/null 2>&1
+    update-ca-certificates >/dev/null 2>&1 || true
   else
     $PKG_MGR -y install epel-release >/dev/null 2>&1 || true
-    $PKG_MGR -y install nginx wget unzip zip curl tar socat jq xz >/dev/null 2>&1
+    $PKG_MGR -y install nginx wget unzip zip curl tar socat jq xz bind-utils ca-certificates >/dev/null 2>&1
+    update-ca-trust >/dev/null 2>&1 || true
   fi
 }
 
@@ -123,7 +126,13 @@ public_ip() {
   curl -4 -s https://ipv4.icanhazip.com || curl -4 -s https://ifconfig.co || true
 }
 
-random_string() { tr -dc 'A-Za-z0-9' </dev/urandom | head -c "${1:-8}"; }
+random_string() {
+  local n=${1:-12} out=
+  while [ ${#out} -lt "$n" ]; do
+    out+=$(dd if=/dev/urandom bs=1 count=$((n*2)) status=none | LC_ALL=C tr -dc '[:alnum:]')
+  done
+  printf '%s' "${out:0:n}"
+}
 
 ACME_HOME="/root/.acme.sh"
 ensure_acme() {
@@ -182,13 +191,22 @@ EOF
 issue_cert() {
   local domain=$1
   mkdir -p /usr/src/trojan-cert
-  "$ACME_HOME"/acme.sh --set-default-ca --server letsencrypt >/dev/null 2>&1 || true
-  "$ACME_HOME"/acme.sh --issue -d "$domain" --webroot /usr/share/nginx/html/ >/dev/null
-  "$ACME_HOME"/acme.sh --installcert -d "$domain" \
+
+  "$ACME_HOME"/acme.sh --set-default-ca --server letsencrypt || true
+
+  # 保留 acme 输出，失败时提示日志位置
+  if ! "$ACME_HOME"/acme.sh --issue --domain "$domain" -w /usr/share/nginx/html/ --debug 2 \
+      | tee /var/log/acme-issue.log; then
+    red "证书申请失败，日志见 /var/log/acme-issue.log"
+    exit 1
+  fi
+
+  "$ACME_HOME"/acme.sh --installcert --domain "$domain" \
     --key-file       /usr/src/trojan-cert/private.key \
     --fullchain-file /usr/src/trojan-cert/fullchain.cer \
-    --reloadcmd     "systemctl force-reload nginx" >/dev/null
-  [[ -s /usr/src/trojan-cert/fullchain.cer ]] || { red "证书申请失败"; exit 1; }
+    --reloadcmd      "nginx -t && systemctl reload nginx"
+
+  [[ -s /usr/src/trojan-cert/fullchain.cer ]] || { red "证书安装失败"; exit 1; }
 }
 
 prepare_nginx_conf() {
@@ -232,21 +250,30 @@ seed_web_content() {
 
 download_trojan_release() {
   pushd /usr/src >/dev/null
-  if [[ ! -f latest.json ]]; then
-    wget -q -O latest.json https://api.github.com/repos/trojan-gfw/trojan/releases/latest
-  fi
-  local latest_version
-  latest_version=$(grep -m1 tag_name latest.json | awk -F '[:,"v]' '{print $6}')
+
+  # 获取最新 release 信息
+  wget -q -O latest.json https://api.github.com/repos/trojan-gfw/trojan/releases/latest
+
+  local tag latest_version
+  tag=$(jq -r '.tag_name' latest.json) || true     # 如 v1.16.0
+  latest_version=${tag#v}
   [[ -n $latest_version ]] || { red "无法解析最新版本"; exit 1; }
-  if [[ ! -d trojan ]]; then
-    wget -q https://github.com/trojan-gfw/trojan/releases/download/v${latest_version}/trojan-${latest_version}-linux-amd64.tar.xz
-    tar xf trojan-${latest_version}-linux-amd64.tar.xz
-  fi
+
+  local tar="trojan-${latest_version}-linux-amd64.tar.xz"
+  [[ -f $tar ]] || wget -q "https://github.com/trojan-gfw/trojan/releases/download/${tag}/${tar}"
+
+  tar xf "$tar"
+
+  # 统一为固定目录，便于 systemd/配置引用
+  rm -rf /usr/src/trojan
+  mv "trojan-${latest_version}-linux-amd64" /usr/src/trojan
+
   popd >/dev/null
 }
 
 write_server_config() {
   local port=$1 password=$2
+  mkdir -p /usr/src/trojan
   cat > /usr/src/trojan/server.conf <<EOF
 {
   "run_type": "server",
